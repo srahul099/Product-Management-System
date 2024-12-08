@@ -22,12 +22,16 @@ func (a *StringArray) Scan(value interface{}) error {
 
     return json.Unmarshal(b, &a)
 } 
+
+
+
 type Products struct {
 	UserID             int      `json:"user_id" gorm:"foreignKey:UserID;references:UserID"`
 	ProductName        string   `json:"product_name"`
 	ProductDescription string   `json:"product_description"`
 	ProductImages      StringArray   `json:"product_images" gorm:"type:json"`
 	ProductPrice       float64  `json:"product_price"`
+	CompressedImages	 StringArray   `json:"compressed_images" gorm:"type:json"`
 }
 
 func MigrateProducts(db *gorm.DB) error {

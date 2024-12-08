@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"zocket/image_processing"
 	"zocket/models"
 	"zocket/storage"
 
@@ -20,9 +22,17 @@ type Repository struct{
 }
 
 func (r *Repository) CreateProduct(context *fiber.Ctx) error {
-	product := models.Products{}
+	
+	var ProductBody struct{
+		UserID int `json:"user_id"`
+		ProductName        string   `json:"product_name"`
+		ProductDescription string   `json:"product_description"`
+		ProductImages      models.StringArray   `json:"product_images" gorm:"type:json"`
+		ProductPrice       float64  `json:"product_price"`
+	}
 
-	err := context.BodyParser(&product)
+
+	err := context.BodyParser(&ProductBody)
 
 	if err != nil {
 		context.Status(http.StatusUnprocessableEntity).JSON(
@@ -30,15 +40,50 @@ func (r *Repository) CreateProduct(context *fiber.Ctx) error {
 		return err
 	}
 
-	err = r.DB.Create(&product).Error
+	var localFilePaths, compressedFilePaths models.StringArray
+    for _, imageUrl := range ProductBody.ProductImages {
+        downloadPath := "downloads/" + filepath.Base(imageUrl)
+        compressedPath := "compressed/" + filepath.Base(imageUrl)
+        bucketName := "pet-adopt-72ad5.appspot.com"
+        objectName := "images/" + filepath.Base(imageUrl)
+
+        uploadedURL, err := image_processing.ProcessImage(imageUrl, downloadPath, compressedPath, bucketName, objectName)
+        if err != nil {
+            log.Fatal("Error:", err.Error())
+        }
+
+        localFilePaths = append(localFilePaths, imageUrl)
+        compressedFilePaths = append(compressedFilePaths, uploadedURL)
+    }
+
+	finalProduct:=models.Products{
+		UserID:ProductBody.UserID,
+		ProductName:ProductBody.ProductName,
+		ProductDescription:ProductBody.ProductDescription,
+		ProductImages:localFilePaths,
+		ProductPrice:ProductBody.ProductPrice,
+		CompressedImages:compressedFilePaths,
+	}
+
+	
+
+	err = r.DB.Create(&finalProduct).Error
 	if err != nil {
 		context.Status(http.StatusBadRequest).JSON(
 			&fiber.Map{"message": "could not create product"})
 		return err
 	}
+	
+	
+
+	if err != nil {
+		log.Fatal("Error:", err.Error())
+	}
+
 
 	context.Status(http.StatusOK).JSON(&fiber.Map{
-		"message": "product has been added"})
+		"message": "product has been added",
+		"data":    finalProduct,})
 	return nil
 }
 
